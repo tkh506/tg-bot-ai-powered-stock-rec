@@ -198,13 +198,32 @@ def _build_stock_section(assets: list[AssetMarketData], prompts: dict) -> str:
                 social_lines.append(ape_line)
             social_section = "\n".join(social_lines) + "\n"
 
+        # Build price header — put extended price first so AI uses it as current_price
+        if o.extended_price is not None and o.extended_label:
+            pct_str = (
+                f", {o.extended_pct:+.2f}% vs ${o.current_price:,.2f} prev close"
+                if o.extended_pct is not None else ""
+            )
+            price_header = (
+                f"  Current price: {_format_price(o.extended_price, o.currency)} "
+                f"({o.extended_label}{pct_str})\n"
+                f"  Prev close: {_format_price(o.current_price, o.currency)} | "
+                f"Open: {_format_price(o.open_price, o.currency)} | "
+                f"High: {_format_price(o.day_high, o.currency)} | "
+                f"Low: {_format_price(o.day_low, o.currency)}\n"
+            )
+        else:
+            price_header = (
+                f"  Current price: {_format_price(o.current_price, o.currency)} | "
+                f"Open: {_format_price(o.open_price, o.currency)} | "
+                f"High: {_format_price(o.day_high, o.currency)} | "
+                f"Low: {_format_price(o.day_low, o.currency)}\n"
+            )
+
         block = (
             f"**{o.ticker} — {o.name}** ({o.currency})\n"
             f"Price data:\n"
-            f"  Current close: {_format_price(o.current_price, o.currency)} | "
-            f"Open: {_format_price(o.open_price, o.currency)} | "
-            f"High: {_format_price(o.day_high, o.currency)} | "
-            f"Low: {_format_price(o.day_low, o.currency)}\n"
+            f"{price_header}"
             f"  5d change: {o.pct_5d:+.2f}% | 20d change: {o.pct_20d:+.2f}%\n"
             f"  Volume vs 20d avg: {o.vol_ratio:.2f}x\n"
             f"  MA(20): {_format_price(o.ma20, o.currency)} | RSI(14): {o.rsi}\n"
@@ -230,10 +249,27 @@ def _build_commodity_section(assets: list[AssetMarketData], prompts: dict) -> st
         all_news: list = list(amd.news) + list(amd.marketaux_news) + list(amd.newsdata_news)
         top_news = _deduplicate_news(all_news, max_items=5)
 
+        # Build commodity price line — put extended price first when available
+        if o.extended_price is not None and o.extended_label:
+            pct_str = (
+                f", {o.extended_pct:+.2f}% vs ${o.current_price:,.2f} prev close"
+                if o.extended_pct is not None else ""
+            )
+            commodity_price_line = (
+                f"  Current price: {_format_price(o.extended_price, o.currency)} "
+                f"({o.extended_label}{pct_str})\n"
+                f"  Prev close: {_format_price(o.current_price, o.currency)} | "
+                f"5d change: {o.pct_5d:+.2f}%\n"
+            )
+        else:
+            commodity_price_line = (
+                f"  Current price: {_format_price(o.current_price, o.currency)} | "
+                f"5d change: {o.pct_5d:+.2f}%\n"
+            )
+
         block = (
             f"**{o.name}** ({o.currency}/unit)\n"
-            f"  Price: {_format_price(o.current_price, o.currency)} | "
-            f"5d change: {o.pct_5d:+.2f}%\n"
+            f"{commodity_price_line}"
             f"  20d high: {_format_price(o.day_high, o.currency)} | "
             f"20d low: {_format_price(o.day_low, o.currency)}\n"
             f"  MA(20): {_format_price(o.ma20, o.currency)} | RSI(14): {o.rsi}\n"
@@ -324,9 +360,19 @@ def build_discovery_prompt(
     gold_context = "(Gold price data unavailable)"
     if broad_data.gold_ohlcv and not broad_data.gold_ohlcv.error:
         g = broad_data.gold_ohlcv
-        gold_context = (
-            f"Gold (GC=F): ${g.current_price:,.2f}/troy oz | "
-            f"5d change: {g.pct_5d:+.2f}% | "
+        if g.extended_price is not None and g.extended_label:
+            pct_str = (
+                f", {g.extended_pct:+.2f}% vs ${g.current_price:,.2f} prev close"
+                if g.extended_pct is not None else ""
+            )
+            gold_context = (
+                f"Gold (GC=F): ${g.extended_price:,.2f}/troy oz "
+                f"(current — {g.extended_label}{pct_str})"
+            )
+        else:
+            gold_context = f"Gold (GC=F): ${g.current_price:,.2f}/troy oz"
+        gold_context += (
+            f" | 5d change: {g.pct_5d:+.2f}% | "
             f"RSI(14): {g.rsi} | MA(20): ${g.ma20:,.2f}"
         )
 

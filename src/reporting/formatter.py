@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Optional
 
 from src.analysis.response_parser import AnalysisResult, AssetSignal, DiscoveryResult
+from src.data.yfinance_client import OHLCVData
 from src.utils.config_loader import AppConfig
 from src.utils.logger import get_logger
 
@@ -22,10 +23,17 @@ TYPE_ORDER = ["stock", "commodity"]
 TYPE_LABEL = {"stock": "Stocks", "commodity": "Commodities"}
 
 
-def _signal_line(asset: AssetSignal) -> str:
+def _fmt_price(value: float) -> str:
+    """Format a numeric price with dollar sign and comma separators."""
+    return f"${value:,.2f}"
+
+
+def _signal_line(
+    asset: AssetSignal,
+    ohlcv_map: Optional[dict[str, OHLCVData]] = None,
+) -> str:
     emoji = SIGNAL_EMOJI.get(asset.signal, "⚪")
     conf = f"{asset.confidence}%"
-    price = asset.current_price or "N/A"
     horizon = HORIZON_LABEL.get(asset.time_horizon, asset.time_horizon)
     target = f"  Target: {asset.target_price}" if asset.target_price else ""
     stop = f"  Stop: {asset.stop_loss}" if asset.stop_loss else ""
@@ -34,9 +42,23 @@ def _signal_line(asset: AssetSignal) -> str:
         risk_str = " | ".join(asset.key_risks[:2])
         risks = f"\n  Risks: {risk_str}"
 
+    # Build price display — show extended-hours price + prev close when available
+    price_str = asset.current_price or "N/A"
+    if ohlcv_map:
+        ohlcv = ohlcv_map.get(asset.ticker)
+        if ohlcv and ohlcv.extended_price is not None and ohlcv.extended_label:
+            pct_str = (
+                f" ({ohlcv.extended_pct:+.2f}%)"
+                if ohlcv.extended_pct is not None else ""
+            )
+            price_str = (
+                f"{_fmt_price(ohlcv.extended_price)}{pct_str} "
+                f"*{ohlcv.extended_label}* | Prev close: {_fmt_price(ohlcv.current_price)}"
+            )
+
     return (
         f"{emoji} *{asset.ticker}* — {asset.signal} ({conf} conf)\n"
-        f"  Price: {price}{target}{stop}\n"
+        f"  Price: {price_str}{target}{stop}\n"
         f"  {asset.justification}\n"
         f"  Horizon: {horizon}{risks}"
     )
@@ -65,10 +87,14 @@ def render(
     result: AnalysisResult,
     config: AppConfig,
     discovery_result: Optional[DiscoveryResult] = None,
+    ohlcv_map: Optional[dict[str, OHLCVData]] = None,
 ) -> list[str]:
     """
     Build the full report as a list of Telegram-ready message strings.
     Each string is <= max_message_length characters.
+
+    ohlcv_map: optional {ticker: OHLCVData} for showing real-time/extended-hours
+               prices alongside the previous regular-session close.
     """
     max_len = config.reporting.telegram.max_message_length
     parts: list[str] = []
@@ -113,7 +139,7 @@ def render(
         label = TYPE_LABEL.get(atype, atype.capitalize())
         flush(f"*{label}*\n")
         for asset in group:
-            flush(_signal_line(asset) + "\n\n")
+            flush(_signal_line(asset, ohlcv_map=ohlcv_map) + "\n\n")
         flush("━━━━━━━━━━━━━━━━━━━━━━\n\n")
 
     # ── Footer ────────────────────────────────────────────────────────────────

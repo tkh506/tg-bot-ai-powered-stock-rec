@@ -24,7 +24,7 @@ from typing import Optional
 
 from src.utils.config_loader import AppConfig
 from src.utils.logger import get_logger
-from src.data.yfinance_client import OHLCVData, fetch_ohlcv_batch
+from src.data.yfinance_client import OHLCVData, fetch_ohlcv_batch, fetch_extended_prices
 from src.data.newsapi_client import NewsArticle, fetch_news_for_asset, NewsAPIQuotaExhausted
 from src.data.alphavantage_client import SentimentData, fetch_sentiment
 from src.data.rss_client import RSSArticle, fetch_asset_news_from_rss, fetch_macro_headlines
@@ -89,6 +89,24 @@ class BroadMarketData:
     economic_indicators: Optional[EconomicIndicators] = None
     gold_ohlcv: Optional[OHLCVData] = None                # GC=F price context for Stage 1
     data_sources_used: list[str] = field(default_factory=list)
+
+
+def _merge_extended_prices(
+    ohlcv_map: dict[str, OHLCVData],
+    extended: dict[str, tuple[float, str] | None],
+) -> None:
+    """Merge extended-hours price data into OHLCVData objects in place."""
+    for ticker, ext in extended.items():
+        if ext is None:
+            continue
+        ohlcv = ohlcv_map.get(ticker)
+        if not ohlcv or ohlcv.error:
+            continue
+        price, label = ext
+        ohlcv.extended_price = price
+        ohlcv.extended_label = label
+        if ohlcv.current_price and ohlcv.current_price != 0:
+            ohlcv.extended_pct = round((price / ohlcv.current_price - 1) * 100, 2)
 
 
 def fetch_broad_market_data(config: AppConfig) -> BroadMarketData:
@@ -172,6 +190,12 @@ def fetch_broad_market_data(config: AppConfig) -> BroadMarketData:
     if gold_ohlcv and not gold_ohlcv.error:
         broad.gold_ohlcv = gold_ohlcv
         broad.data_sources_used.append("yfinance")
+        # Enrich Gold with latest extended-hours price (sequential — never concurrent)
+        try:
+            extended = fetch_extended_prices([GOLD_TICKER])
+            _merge_extended_prices({GOLD_TICKER: gold_ohlcv}, extended)
+        except Exception as e:
+            logger.warning(f"Gold extended price fetch failed: {e}")
 
     logger.info(f"Broad market data fetched. Sources: {broad.data_sources_used}")
     return broad
@@ -340,6 +364,16 @@ def fetch_targeted_data(
         raw_results[("yfinance", ticker)] = ohlcv
     if yf_batch:
         snapshot.data_sources_used.append("yfinance")
+
+    # ── Enrich with extended-hours prices (sequential — never concurrent) ──────
+    if yf_batch and ds.yfinance.enabled:
+        try:
+            extended = fetch_extended_prices(list(yf_batch.keys()))
+            # yf_batch values are the same OHLCVData objects referenced by raw_results,
+            # so in-place modification propagates to all downstream assembly.
+            _merge_extended_prices(yf_batch, extended)
+        except Exception as e:
+            logger.warning(f"Extended price fetch failed: {e}")
 
     # ── Extract Adanos batch results ───────────────────────────────────────────
     def _adanos_dict(source_key: str) -> dict[str, AdanosTickerSentiment]:

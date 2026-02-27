@@ -5,7 +5,9 @@ yfinance client: fetches OHLCV price data for stocks, forex pairs, and commoditi
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import time as dt_time
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -13,6 +15,10 @@ import yfinance as yf
 
 from src.utils.logger import get_logger
 from src.utils.rate_limiter import make_retry
+
+_ET = ZoneInfo("America/New_York")
+_MARKET_OPEN = dt_time(9, 30)
+_MARKET_CLOSE = dt_time(16, 0)
 
 logger = get_logger("data.yfinance")
 
@@ -32,6 +38,10 @@ class OHLCVData:
     vol_ratio: float       # Today's volume / 20-day average volume
     currency: str = "USD"
     error: Optional[str] = None
+    # Extended-hours price (populated by a separate fetch_extended_prices call)
+    extended_price: Optional[float] = None   # latest after-hours or pre-market price
+    extended_pct: Optional[float] = None     # % change vs current_price (prev close)
+    extended_label: Optional[str] = None     # "after-hours" | "pre-market"
 
 
 _retry = make_retry(max_attempts=3, min_wait=2, max_wait=15)
@@ -199,4 +209,87 @@ def fetch_ohlcv_batch(
             logger.warning(f"yfinance processing failed for {ticker}: {exc}")
             results[ticker] = _make_error(ticker, name, currency, exc)
 
+    return results
+
+
+def fetch_extended_prices(
+    tickers: list[str],
+) -> dict[str, tuple[float, str] | None]:
+    """
+    Fetch the latest real-time / extended-hours price for a list of tickers.
+
+    Uses a single batch yfinance call with 1-minute bars and prepost=True to capture
+    after-hours (16:00–20:00 ET) and pre-market (04:00–09:30 ET) prices.
+
+    Returns {ticker: (price, label)} where label is "after-hours" or "pre-market",
+    or {ticker: None} if the last bar is within regular market hours or data is absent.
+    """
+    if not tickers:
+        return {}
+
+    results: dict[str, tuple[float, str] | None] = {}
+
+    try:
+        raw = yf.download(
+            tickers,
+            period="1d",
+            interval="1m",
+            prepost=True,
+            progress=False,
+            auto_adjust=True,
+            group_by="ticker",
+        )
+    except Exception as exc:
+        logger.warning(f"Extended price batch download failed: {exc}")
+        return {t: None for t in tickers}
+
+    if raw is None or (hasattr(raw, "empty") and raw.empty):
+        logger.debug("Extended price batch returned empty DataFrame")
+        return {t: None for t in tickers}
+
+    for ticker in tickers:
+        try:
+            # Handle MultiIndex (multi-ticker) vs flat columns (single-ticker)
+            if isinstance(raw.columns, pd.MultiIndex):
+                if ticker not in raw.columns.get_level_values(0):
+                    results[ticker] = None
+                    continue
+                df = raw[ticker].copy()
+            else:
+                df = raw.copy()
+
+            df = df.dropna(how="all")
+            if df.empty:
+                results[ticker] = None
+                continue
+
+            last_price = float(df["Close"].iloc[-1])
+            last_ts = df.index[-1]
+
+            # Normalise timezone: yfinance intraday returns UTC-aware timestamps;
+            # treat tz-naive timestamps as UTC (fallback, should not normally occur).
+            if last_ts.tzinfo is None:
+                from datetime import timezone as _tz
+                last_ts = last_ts.replace(tzinfo=_tz.utc)
+            last_et = last_ts.astimezone(_ET)
+            t = last_et.time()
+
+            if t < _MARKET_OPEN:
+                label = "pre-market"
+            elif t >= _MARKET_CLOSE:
+                label = "after-hours"
+            else:
+                # Last bar is within regular market hours — not an extended price
+                results[ticker] = None
+                continue
+
+            results[ticker] = (round(last_price, 4), label)
+            logger.debug(f"Extended price {ticker}: {label} ${last_price:.4f} at {last_et.strftime('%H:%M ET')}")
+
+        except Exception as exc:
+            logger.debug(f"Extended price failed for {ticker}: {exc}")
+            results[ticker] = None
+
+    with_data = sum(1 for v in results.values() if v is not None)
+    logger.info(f"Extended prices fetched: {with_data}/{len(tickers)} tickers with extended-hours data")
     return results

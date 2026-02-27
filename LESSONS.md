@@ -257,6 +257,37 @@ The 403 is expected — the free Finnhub tier does not include price targets.
 
 ---
 
+## Session: 2026-02-27
+
+### LESSON 14 — Prompt label hierarchy determines which value the AI uses as current_price in its JSON
+
+**What happened:**
+After adding after-hours price enrichment, the AI prompt showed `Prev close: $84.59` on the first price line and `After-hours price: $91.78 (+8.5% vs prev close)` on the second. The AI correctly cited the after-hours price in its justification text, but filled `current_price: 84.59` in its JSON response (the first price it saw). The Telegram report therefore showed the stale closing price in the `Price:` field despite the after-hours data being present.
+
+**Rule:**
+- The AI uses the **first price it sees** in the prompt as the value it writes to the `current_price` JSON field.
+- Always put the most current/relevant price **first**, labelled `"Current price:"`. Show historical context (e.g. prev close) on a secondary line.
+- Correct structure:
+  ```
+  Current price: $91.78 (after-hours, +8.50% vs $84.59 prev close)
+  Prev close: $84.59 | Open: ... | High: ... | Low: ...
+  ```
+- Never rely solely on AI-provided `current_price` for display in the Telegram report. The formatter should also have direct access to the raw `OHLCVData` so it can independently display the authoritative price (see LESSON 15).
+
+---
+
+### LESSON 15 — The report formatter should hold independent access to raw price data, not just AI response fields
+
+**What happened:**
+The `formatter.py` `_signal_line()` only displayed `asset.current_price` — a string the AI wrote in its JSON. Even after fixing the prompt label hierarchy (LESSON 14), this made the formatter dependent on the AI correctly echoing back a price. To show both the after-hours price and the prev close in the Telegram report reliably, the formatter needed direct access to the fetched `OHLCVData`.
+
+**Rule:**
+- For any data field that must appear accurately in the final report, pass the raw fetched data to `formatter.render()` rather than depending on the AI to echo it back.
+- Build a `{ticker: OHLCVData}` map in `main.py` from the `MarketSnapshot` and pass it as `ohlcv_map` to `render()`. The formatter uses this as the authoritative source for price display, falling back to `asset.current_price` only when the map has no entry.
+- The AI response is for analysis/recommendations; the formatter should source factual market data independently.
+
+---
+
 <!-- Template for new lessons:
 
 ### LESSON N — Short title

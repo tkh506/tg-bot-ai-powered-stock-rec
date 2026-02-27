@@ -156,7 +156,15 @@ def _run_pipeline(config, dry_run: bool = False) -> None:
 
     # ── PHASE 3: Format report ─────────────────────────────────────────────────
     logger.info("=== PHASE 3: Formatting report ===")
-    report_parts = formatter.render(result, config, discovery_result=discovery_result)
+    # Build ticker → OHLCVData map so the formatter can show real-time/extended prices
+    ohlcv_map = {
+        amd.ticker: amd.ohlcv
+        for amd in snapshot.all_assets()
+        if amd.ohlcv and not amd.ohlcv.error
+    }
+    report_parts = formatter.render(
+        result, config, discovery_result=discovery_result, ohlcv_map=ohlcv_map
+    )
     full_report_md = "\n\n---\n\n".join(report_parts)
 
     # ── PHASE 4: Send via Telegram ─────────────────────────────────────────────

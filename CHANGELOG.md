@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.5.0] — 2026-02-27
+
+### Added
+- **After-hours / pre-market price enrichment** — the pipeline now fetches the latest extended-hours price for every ticker immediately after the historical OHLCV batch. A second `yf.download(period="1d", interval="1m", prepost=True)` call is made as a single batch (never parallel, preserving LESSON 4). For each ticker, the last bar's timestamp is checked against US/Eastern market hours:
+  - Before 09:30 ET → labelled `"pre-market"`
+  - At/after 16:00 ET → labelled `"after-hours"`
+  - Within regular hours → no extended price (fallback to regular close)
+- **`OHLCVData`** — three new optional fields added to the dataclass: `extended_price: Optional[float]`, `extended_pct: Optional[float]` (% change vs regular close), `extended_label: Optional[str]` (`"after-hours"` or `"pre-market"`). All default to `None` — no breaking change.
+- **`fetch_extended_prices(tickers)`** in `yfinance_client.py` — single-batch function returning `{ticker: (price, label) | None}`. Uses `zoneinfo.ZoneInfo` (stdlib, no new dependencies) for US/Eastern timezone classification.
+- **`_merge_extended_prices(ohlcv_map, extended)`** in `fetcher.py` — merges extended-hours data into `OHLCVData` objects in place; also computes `extended_pct`.
+
+### Changed
+- **`fetch_broad_market_data()`** (Phase 1) — after Gold's historical OHLCV batch, calls `fetch_extended_prices([GC=F])` sequentially and merges into the Gold `OHLCVData`.
+- **`fetch_targeted_data()`** (Phase 2) — after the main `ThreadPoolExecutor` block, calls `fetch_extended_prices(all_tickers)` sequentially. Since `yf_batch` holds the same `OHLCVData` object references as `raw_results`, the in-place update propagates to all downstream assembly automatically.
+- **`prompt_builder.py`** — price block restructured in both `_build_stock_section` and `_build_commodity_section`: when extended price is available, shows `Current price: $X.XX (after-hours/pre-market, +Y% vs $Z.ZZ prev close)` first, then regular session data on the next line. Without extended data, falls back to a single `Current price:` line. Gold context in `build_discovery_prompt` updated the same way.
+- **`formatter.py`** — `_signal_line()` now accepts an optional `ohlcv_map: dict[str, OHLCVData]`; when extended-hours data is present for a ticker, the `Price:` line in the Telegram report shows `$X.XX (+Y%) *after-hours* | Prev close: $Z.ZZ` sourced directly from the fetched data (not from the AI's JSON response). `render()` updated to accept and pass through `ohlcv_map`.
+- **`main.py`** — builds `{ticker: OHLCVData}` from `MarketSnapshot` before calling `formatter.render()` and passes it as `ohlcv_map`.
+
+---
+
 ## [0.4.0] — 2026-02-27
 
 ### Added
