@@ -22,7 +22,8 @@ ExecStart=/tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/python -m src.main
 # Resource limits
 MemoryMax=512M
 CPUQuota=80%
-TimeoutStartSec=300       # Kill if run takes longer than 5 minutes
+# Kill if run takes longer than 5 minutes
+TimeoutStartSec=300
 TimeoutStopSec=30
 
 # Do NOT restart: systemd timer handles the schedule
