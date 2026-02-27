@@ -5,8 +5,8 @@
 # =============================================================================
 set -euo pipefail
 
-APP_DIR="/opt/ai-investment-advisor"
-REPO_URL="https://github.com/tkh506/tg-bot-ai-powered-stock-rec.git"   # update this
+APP_DIR="/tg-bot/tg-bot-ai-powered-stock-rec"
+REPO_URL="https://github.com/tkh506/tg-bot-ai-powered-stock-rec.git"
 
 echo "==> Updating system packages"
 apt-get update && apt-get upgrade -y

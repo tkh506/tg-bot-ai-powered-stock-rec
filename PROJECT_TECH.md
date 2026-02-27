@@ -261,14 +261,14 @@ journalctl -u ai-investment-advisor -f
 systemctl list-timers ai-investment-advisor.timer
 
 # Tail the rotating log file
-tail -f /opt/ai-investment-advisor/logs/advisor.log
+tail -f /tg-bot/tg-bot-ai-powered-stock-rec/logs/advisor.log
 
 # Query recent reports from SQLite
-sqlite3 /opt/ai-investment-advisor/data/reports.db \
+sqlite3 /tg-bot/tg-bot-ai-powered-stock-rec/data/reports.db \
   "SELECT run_at, portfolio_bias, error_flag FROM reports ORDER BY run_at DESC LIMIT 5;"
 
 # Query recent signals for a ticker
-sqlite3 /opt/ai-investment-advisor/data/reports.db \
+sqlite3 /tg-bot/tg-bot-ai-powered-stock-rec/data/reports.db \
   "SELECT run_at, signal, confidence FROM signals WHERE ticker='AAPL' ORDER BY run_at DESC LIMIT 10;"
 
 # ── Bot listener management ────────────────────────────────────────────────────
@@ -456,11 +456,12 @@ OpenRouter cost is slightly higher than v0.2.0 (~+$0.001/run) due to the additio
 - **Machine type**: `e2-small` (2 vCPU, 2 GB RAM)
 - **OS**: Debian 12 Bookworm
 - **Region**: `asia-east2` (Hong Kong)
-- **App path**: `/opt/ai-investment-advisor/`
-- **App user**: `advisor` (system user, no shell)
-- **Python env**: `/opt/ai-investment-advisor/venv/`
-- **Secrets**: `/opt/ai-investment-advisor/.env` (chmod 600)
-- **Logs**: `/opt/ai-investment-advisor/logs/advisor.log` + `journalctl -u ai-investment-advisor`
+- **App path**: `/tg-bot/tg-bot-ai-powered-stock-rec/`
+- **App user**: `stockbot` (system user, no shell — isolated from other bots on the same VM)
+- **Python env**: `/tg-bot/tg-bot-ai-powered-stock-rec/venv/`
+- **Secrets**: `/tg-bot/tg-bot-ai-powered-stock-rec/.env` (chmod 600)
+- **Logs**: `/tg-bot/tg-bot-ai-powered-stock-rec/logs/advisor.log` + `journalctl -u ai-investment-advisor`
+- **SSH access**: `ssh YOUR_USER@YOUR_VM_EXTERNAL_IP`
 
 ---
 

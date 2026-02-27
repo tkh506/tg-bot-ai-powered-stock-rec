@@ -5,8 +5,8 @@
 # =============================================================================
 set -euo pipefail
 
-APP_DIR="/opt/ai-investment-advisor"
-APP_USER="advisor"
+APP_DIR="/tg-bot/tg-bot-ai-powered-stock-rec"
+APP_USER="stockbot"
 
 # ── Create dedicated system user ──────────────────────────────────────────────
 echo "==> Creating system user: $APP_USER"

@@ -7,11 +7,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=advisor
-Group=advisor
-WorkingDirectory=/opt/ai-investment-advisor
-EnvironmentFile=/opt/ai-investment-advisor/.env
-ExecStart=/opt/ai-investment-advisor/venv/bin/python -m src.notifications.bot_listener
+User=stockbot
+Group=stockbot
+WorkingDirectory=/tg-bot/tg-bot-ai-powered-stock-rec
+EnvironmentFile=/tg-bot/tg-bot-ai-powered-stock-rec/.env
+ExecStart=/tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/python -m src.notifications.bot_listener
 
 # Restart if the listener crashes (e.g. network blip, Telegram API hiccup)
 Restart=on-failure

@@ -8,9 +8,13 @@ and the routine workflow for testing and deploying future updates.
 ## Prerequisites
 
 - GCP Compute Engine VM already provisioned (Debian 12, `e2-small`, `asia-east2`)
-- SSH access to the VM (via GCP Console or `gcloud compute ssh`)
-- GitHub account and a new **private** repository created for this project
+- SSH access to the VM via terminal: `ssh YOUR_USER@YOUR_VM_EXTERNAL_IP`
+- GitHub account with the repo `tkh506/tg-bot/tg-bot-ai-powered-stock-rec`
 - All API keys ready (see `.env.example`)
+
+> **Multi-bot VM**: This bot installs to `/tg-bot/tg-bot-ai-powered-stock-rec/` and runs as
+> system user `stockbot`. Each Telegram bot on the VM should have its own directory under
+> `/tg-bot/` and its own dedicated system user, so services, logs, and secrets stay isolated.
 
 ---
 
@@ -26,8 +30,8 @@ git init
 git add .
 git commit -m "Initial commit"
 
-# Connect to your GitHub repo (replace with your actual repo URL)
-git remote add origin https://github.com/YOUR_USERNAME/ai-investment-advisor.git
+# Connect to your GitHub repo
+git remote add origin https://github.com/tkh506/tg-bot-ai-powered-stock-rec.git
 git branch -M main
 git push -u origin main
 ```
@@ -37,43 +41,37 @@ git push -u origin main
 
 ---
 
-### Step 2 — Update the repo URL in the bootstrap script
+### Step 2 — Confirm the repo URL in the bootstrap script
 
-In `deploy/setup_gcp.sh`, replace the placeholder with your real repo URL:
+`deploy/setup_gcp.sh` already has the correct repo URL set:
 
 ```bash
-REPO_URL="https://github.com/YOUR_USERNAME/ai-investment-advisor.git"
+REPO_URL="https://github.com/tkh506/tg-bot-ai-powered-stock-rec.git"
 ```
 
-Commit and push this change:
-```bash
-git add deploy/setup_gcp.sh
-git commit -m "Set repo URL in setup_gcp.sh"
-git push
-```
+If you haven't pushed yet, this will be committed as part of Step 1.
 
 ---
 
 ### Step 3 — Bootstrap the GCP VM (run once as root)
 
-SSH into the VM and run the bootstrap script:
+SSH into the VM from your terminal:
 
 ```bash
-# SSH to VM (or use GCP Console)
-gcloud compute ssh YOUR_VM_NAME --zone asia-east2-a
+# SSH into the VM
+ssh YOUR_USER@YOUR_VM_EXTERNAL_IP
 
 # On the VM — switch to root
 sudo su -
 
-# Download and run the bootstrap script directly from GitHub
-curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/ai-investment-advisor/main/deploy/setup_gcp.sh | bash
+# Clone the repo directly into the target folder
+git clone https://github.com/tkh506/tg-bot-ai-powered-stock-rec.git /tg-bot/tg-bot-ai-powered-stock-rec
 
-# Or: clone manually if you prefer to inspect first
-git clone https://github.com/YOUR_USERNAME/ai-investment-advisor.git /opt/ai-investment-advisor
-bash /opt/ai-investment-advisor/deploy/setup_gcp.sh
+# Run the bootstrap script (installs Python 3.11, git, sqlite3, creates dirs)
+bash /tg-bot/tg-bot-ai-powered-stock-rec/deploy/setup_gcp.sh
 ```
 
-This installs Python 3.11, git, sqlite3, and clones the repo to `/opt/ai-investment-advisor`.
+This installs Python 3.11, git, sqlite3, and clones the repo to `/tg-bot/tg-bot-ai-powered-stock-rec`.
 
 ---
 
@@ -82,7 +80,7 @@ This installs Python 3.11, git, sqlite3, and clones the repo to `/opt/ai-investm
 Still as root:
 
 ```bash
-cd /opt/ai-investment-advisor
+cd /tg-bot/tg-bot-ai-powered-stock-rec
 
 # Copy the template
 cp .env.example .env
@@ -113,10 +111,10 @@ Add any optional source keys (NEWSAPI_KEY, FINNHUB_API_KEY, etc.) you have.
 Still as root:
 
 ```bash
-bash /opt/ai-investment-advisor/deploy/install.sh
+bash /tg-bot/tg-bot-ai-powered-stock-rec/deploy/install.sh
 ```
 
-This creates the `advisor` system user, builds the Python venv, installs all dependencies,
+This creates the `stockbot` system user, builds the Python venv, installs all dependencies,
 registers + starts the systemd timer, adds the sudoers rule, and starts the bot listener.
 
 Expected output ends with:
@@ -148,7 +146,7 @@ Pipeline completed successfully. Report sent to Telegram.
 Alternatively, do a dry run (no Telegram message sent):
 
 ```bash
-sudo -u advisor /opt/ai-investment-advisor/venv/bin/python -m src.main --dry-run
+sudo -u stockbot /tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/python -m src.main --dry-run
 ```
 
 Also verify the bot listener is running:
@@ -232,13 +230,13 @@ git push
 **5. SSH into the VM**
 
 ```bash
-gcloud compute ssh YOUR_VM_NAME --zone asia-east2-a
+ssh YOUR_USER@YOUR_VM_EXTERNAL_IP
 ```
 
 **6. Pull the latest code**
 
 ```bash
-sudo git -C /opt/ai-investment-advisor pull
+sudo git -C /tg-bot/tg-bot-ai-powered-stock-rec pull
 ```
 
 You should see the list of changed files. Verify it looks correct.
@@ -246,7 +244,7 @@ You should see the list of changed files. Verify it looks correct.
 **7. Install new dependencies (only if `requirements.txt` changed)**
 
 ```bash
-sudo -u advisor /opt/ai-investment-advisor/venv/bin/pip install -r /opt/ai-investment-advisor/requirements.txt --quiet
+sudo -u stockbot /tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/pip install -r /tg-bot/tg-bot-ai-powered-stock-rec/requirements.txt --quiet
 ```
 
 Skip this step if only `.py` or `.yaml` files changed.
@@ -297,8 +295,8 @@ Check that the fix/feature you deployed is visible in the logs.
 
 | Task | Command |
 |---|---|
-| Pull latest code | `sudo git -C /opt/ai-investment-advisor pull` |
-| Install new deps | `sudo -u advisor /opt/ai-investment-advisor/venv/bin/pip install -r /opt/ai-investment-advisor/requirements.txt` |
+| Pull latest code | `sudo git -C /tg-bot/tg-bot-ai-powered-stock-rec pull` |
+| Install new deps | `sudo -u stockbot /tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/pip install -r /tg-bot/tg-bot-ai-powered-stock-rec/requirements.txt` |
 | Reload systemd units | `sudo systemctl daemon-reload` |
 | Restart timer | `sudo systemctl restart ai-investment-advisor.timer` |
 | Restart bot listener | `sudo systemctl restart ai-investment-advisor-listener.service` |
@@ -306,9 +304,9 @@ Check that the fix/feature you deployed is visible in the logs.
 | Stream pipeline logs | `journalctl -u ai-investment-advisor -f` |
 | Stream listener logs | `journalctl -u ai-investment-advisor-listener -f` |
 | Check timer schedule | `systemctl list-timers ai-investment-advisor.timer` |
-| Tail app log file | `tail -f /opt/ai-investment-advisor/logs/advisor.log` |
-| Check recent reports | `sqlite3 /opt/ai-investment-advisor/data/reports.db "SELECT run_at, portfolio_bias, error_flag FROM reports ORDER BY run_at DESC LIMIT 5;"` |
-| Edit secrets | `sudo nano /opt/ai-investment-advisor/.env` |
+| Tail app log file | `tail -f /tg-bot/tg-bot-ai-powered-stock-rec/logs/advisor.log` |
+| Check recent reports | `sqlite3 /tg-bot/tg-bot-ai-powered-stock-rec/data/reports.db "SELECT run_at, portfolio_bias, error_flag FROM reports ORDER BY run_at DESC LIMIT 5;"` |
+| Edit secrets | `sudo nano /tg-bot/tg-bot-ai-powered-stock-rec/.env` |
 
 ---
 
@@ -322,7 +320,7 @@ python -m src.main --dry-run
 git add config/config.yaml && git commit -m "Update: ..." && git push
 
 # VM: pull + restart timer (no pip install, no daemon-reload needed)
-sudo git -C /opt/ai-investment-advisor pull
+sudo git -C /tg-bot/tg-bot-ai-powered-stock-rec pull
 sudo systemctl restart ai-investment-advisor.timer
 ```
 
@@ -333,7 +331,7 @@ sudo systemctl restart ai-investment-advisor.timer
 python -m src.main --dry-run
 
 # VM: pull + restart timer (no pip install, no daemon-reload needed)
-sudo git -C /opt/ai-investment-advisor pull
+sudo git -C /tg-bot/tg-bot-ai-powered-stock-rec pull
 sudo systemctl restart ai-investment-advisor.timer
 ```
 
@@ -346,9 +344,9 @@ python -m src.main --dry-run
 git add src/... && git commit -m "..." && git push
 
 # VM: pull + optionally install deps + restart timer
-sudo git -C /opt/ai-investment-advisor pull
+sudo git -C /tg-bot/tg-bot-ai-powered-stock-rec pull
 # Only if requirements.txt changed:
-sudo -u advisor /opt/ai-investment-advisor/venv/bin/pip install -r /opt/ai-investment-advisor/requirements.txt
+sudo -u stockbot /tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/pip install -r /tg-bot/tg-bot-ai-powered-stock-rec/requirements.txt
 sudo systemctl restart ai-investment-advisor.timer
 ```
 
@@ -356,7 +354,7 @@ sudo systemctl restart ai-investment-advisor.timer
 
 ```bash
 # VM only — edit .env and restart both services
-sudo nano /opt/ai-investment-advisor/.env
+sudo nano /tg-bot/tg-bot-ai-powered-stock-rec/.env
 sudo systemctl restart ai-investment-advisor.timer
 sudo systemctl restart ai-investment-advisor-listener.service
 # No git pull needed (secrets are never in git)
@@ -389,12 +387,12 @@ journalctl -u ai-investment-advisor-listener -f
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `git pull` on VM shows "not a git repository" | Wrong directory | Always use `sudo git -C /opt/ai-investment-advisor pull` |
-| Service fails immediately | `.env` missing or malformed | `sudo -u advisor /opt/ai-investment-advisor/venv/bin/python -m src.main --dry-run` to see the error |
+| `git pull` on VM shows "not a git repository" | Wrong directory | Always use `sudo git -C /tg-bot/tg-bot-ai-powered-stock-rec pull` |
+| Service fails immediately | `.env` missing or malformed | `sudo -u stockbot /tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/python -m src.main --dry-run` to see the error |
 | Timer never fires | Timer not enabled | `sudo systemctl enable --now ai-investment-advisor.timer` |
 | `Import error` after pull | New dependency not installed | Run the `pip install` command in Step 7 above |
 | Telegram "Chat not found" | Wrong `TELEGRAM_CHAT_ID` in `.env` | Add the bot to the group chat, send a message, then call `https://api.telegram.org/bot<TOKEN>/getUpdates` to find the correct chat ID |
-| All sources empty in logs | API keys missing from `.env` | `sudo nano /opt/ai-investment-advisor/.env` and verify all keys are set |
+| All sources empty in logs | API keys missing from `.env` | `sudo nano /tg-bot/tg-bot-ai-powered-stock-rec/.env` and verify all keys are set |
 | `/report` gets no response | Listener not running or wrong user ID | Check `systemctl status ai-investment-advisor-listener.service`; verify `TELEGRAM_OWNER_USER_ID` matches what `@userinfobot` returned |
 | Listener starts then immediately stops | `TELEGRAM_OWNER_USER_ID` not set in `.env` | Add it to `.env` and `sudo systemctl restart ai-investment-advisor-listener.service` |
 | `/report` says "Failed to start pipeline" | Sudoers rule missing | Re-run `install.sh` as root, or manually add the rule (see `install.sh` comments) |
