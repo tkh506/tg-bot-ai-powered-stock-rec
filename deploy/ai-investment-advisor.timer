@@ -1,0 +1,18 @@
+[Unit]
+Description=AI Investment Advisor — daily schedule timer
+Requires=ai-investment-advisor.service
+
+[Timer]
+# Daily at 18:00 HKT = 10:00 UTC (HKT is UTC+8)
+# To change frequency, edit OnCalendar and reload:
+#   sudo systemctl daemon-reload && sudo systemctl restart ai-investment-advisor.timer
+OnCalendar=*-*-* 10:00:00 UTC
+
+# Fire at the next opportunity if the VM was offline at the scheduled time
+Persistent=true
+
+# Small random delay to avoid thundering herd (irrelevant for single VM, good practice)
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target

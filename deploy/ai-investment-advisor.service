@@ -1,0 +1,36 @@
+[Unit]
+Description=AI Investment Advisor — one-shot market analysis run
+After=network-online.target
+Wants=network-online.target
+# Ensure the previous run finishes before the timer fires again
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+
+# Run as dedicated non-privileged user
+User=advisor
+Group=advisor
+WorkingDirectory=/opt/ai-investment-advisor
+
+# Load secrets from .env file (kept on disk, not in git)
+EnvironmentFile=/opt/ai-investment-advisor/.env
+
+# Run via virtual environment
+ExecStart=/opt/ai-investment-advisor/venv/bin/python -m src.main
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=80%
+TimeoutStartSec=300       # Kill if run takes longer than 5 minutes
+TimeoutStopSec=30
+
+# Do NOT restart: systemd timer handles the schedule
+Restart=no
+
+# Output captured by journald AND rotating file via Python logger
+StandardOutput=append:/opt/ai-investment-advisor/logs/advisor.log
+StandardError=append:/opt/ai-investment-advisor/logs/advisor.log
+
+[Install]
+WantedBy=multi-user.target

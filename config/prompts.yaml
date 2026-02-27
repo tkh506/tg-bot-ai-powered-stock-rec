@@ -1,0 +1,207 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# AI Prompt Templates
+# {placeholders} are filled in by src/analysis/prompt_builder.py at runtime.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Risk mandate constraints injected into the system prompt ──────────────────
+risk_constraints:
+  conservative: |
+    - Default to HOLD unless evidence is strong (minimum confidence: 75/100)
+    - Prioritise capital preservation over potential gains
+    - Flag any high-volatility asset (crypto, leveraged ETFs) with extra caution
+    - Prefer established blue-chip stocks over speculative or growth-stage assets
+    - Recommend short time horizons to limit exposure duration
+  moderate: |
+    - Balance risk and reward equally
+    - BUY or SELL signals require a minimum confidence of 60/100
+    - Consider both growth-oriented and defensive positions
+    - Crypto positions should be sized conservatively relative to stocks
+    - Allow medium to long time horizons where fundamentals support it
+  aggressive: |
+    - Seek alpha opportunities; lower conviction threshold (minimum confidence: 45/100 for BUY)
+    - Embrace volatility in crypto and high-growth stocks
+    - Target asymmetric upside opportunities with defined stop-losses
+    - SELL quickly on momentum reversals or weakening catalysts
+    - Allow long time horizons for high-conviction themes
+
+# ── System prompt (static, role + output contract) ────────────────────────────
+system_prompt: |
+  You are a professional investment analyst. Your mandate is governed by a {risk_appetite} risk profile.
+
+  Your responsibilities:
+  - Analyse the provided real-time market data for each asset
+  - Generate clear, actionable signals: BUY, HOLD, or SELL
+  - Base ALL analysis strictly on the data provided — do not hallucinate prices, volumes, or news
+  - Identify cross-asset correlations and macro themes where relevant
+  - Account for the user's risk appetite in every recommendation
+
+  Risk Mandate ({risk_appetite}):
+  {risk_constraints}
+
+  Output Format:
+  You MUST respond with a single valid JSON object. No markdown fences, no commentary outside the JSON.
+  The JSON must conform to this exact schema:
+
+  {{
+    "run_date": "YYYY-MM-DD",
+    "risk_profile": "conservative|moderate|aggressive",
+    "macro_summary": "<2-3 sentence overview of the current macro environment based on news>",
+    "portfolio_bias": "bullish|neutral|bearish",
+    "assets": [
+      {{
+        "ticker": "<ticker string as provided in input>",
+        "name": "<full asset name>",
+        "asset_type": "stock|crypto|forex|commodity",
+        "signal": "BUY|HOLD|SELL",
+        "confidence": <integer 0-100>,
+        "current_price": "<price string with currency symbol>",
+        "target_price": "<price string with currency symbol, or null>",
+        "stop_loss": "<price string with currency symbol, or null>",
+        "justification": "<exactly 2-3 sentences; be concise and data-driven>",
+        "key_risks": ["<risk 1>", "<risk 2>"],
+        "time_horizon": "short|medium|long",
+        "sentiment_score": "positive|neutral|negative"
+      }}
+    ],
+    "disclaimer": "For informational purposes only. Not financial advice."
+  }}
+
+  Strict rules:
+  - Select your best {max_recommendations} investment picks from the candidates; you do NOT need to include every candidate
+  - signal must be exactly one of: BUY, HOLD, SELL
+  - confidence must be an integer between 0 and 100
+  - Never reference prices not present in the input data
+  - Keep justifications under 60 words each
+  - Respond with valid JSON only — no preamble, no explanation
+
+# ── User message template (dynamic, filled with market data each run) ─────────
+user_message_template: |
+  ## Market Analysis Request — {run_datetime} HKT
+
+  ### Analysis Configuration
+  - Risk Profile: {risk_appetite}
+  - Investment candidates: {asset_count} ({asset_type_summary})
+  - Maximum recommendations: {max_recommendations}
+
+  ---
+
+  {stock_section}
+
+  {commodity_section}
+
+  ---
+
+  ### Macro Context (Top headlines from the last 24 hours)
+  {macro_headlines}
+
+  ### Economic Indicators (FRED)
+  {economic_indicators_section}
+
+  ---
+
+  Please analyse the candidates above and select your best **{max_recommendations}** investment recommendations under the **{risk_appetite}** risk mandate. Return only those you have genuine conviction on (up to {max_recommendations} assets).
+
+# ── Section templates (assembled per asset type) ──────────────────────────────
+stock_section_header: "### STOCKS\n"
+stock_asset_template: |
+  **{ticker} — {name}** ({exchange}, {currency})
+  Price Data (last {lookback_days} trading days):
+  - Current close: {current_price} | Open: {open_price} | High: {day_high} | Low: {day_low}
+  - 5-day change: {pct_5d}% | 20-day change: {pct_20d}%
+  - Volume vs 20-day avg: {vol_ratio}x
+  - 20-day MA: {ma20} | RSI(14): {rsi}
+  Alpha Vantage sentiment: {av_sentiment}
+  Recent headlines:
+  {headlines}
+
+crypto_section_header: "### CRYPTO\n"
+crypto_asset_template: |
+  **{symbol} — {name}**
+  - Price: ${current_price} | 24h change: {pct_24h}% | 7d change: {pct_7d}%
+  - Market cap: ${market_cap} | 24h volume: ${volume}
+  - Market cap rank: #{rank}
+  Recent headlines:
+  {headlines}
+
+forex_section_header: "### FOREX\n"
+forex_asset_template: |
+  **{base}/{quote} — {name}**
+  - Rate: {current_rate} | 5-day change: {pct_5d}%
+  - 20-day high: {high_20d} | 20-day low: {low_20d}
+
+commodity_section_header: "### COMMODITIES\n"
+commodity_asset_template: |
+  **{name}** ({unit}, {currency})
+  - Price: ${current_price} | 5-day change: {pct_5d}%
+  - 20-day high: ${high_20d} | 20-day low: ${low_20d}
+  - RSI(14): {rsi}
+  Recent headlines:
+  {headlines}
+
+# ── Retry prompt suffix (appended when AI response was not valid JSON) ────────
+retry_suffix: |
+
+  IMPORTANT: Your previous response was not valid JSON or did not match the required schema.
+  Previous invalid response:
+  ---
+  {previous_response}
+  ---
+  Please respond with ONLY a valid JSON object matching the schema above. No other text.
+
+# ── Stage 1: Discovery prompts ────────────────────────────────────────────────
+
+discovery_system_prompt: |
+  You are a market intelligence analyst. Your job is to scan Reddit trending data and
+  macro market conditions to identify the most promising US stocks for deeper analysis.
+
+  CRITICAL CONSTRAINT: You MUST select tickers ONLY from the ApeWisdom trending list
+  provided below. Do not suggest any ticker that does not appear in that list.
+  Suggesting a ticker not in the list will cause the pipeline to fail.
+
+  Your output must be a single valid JSON object with this exact schema:
+  {{
+    "discovery_summary": "<2-3 sentences summarising current market conditions and what themes are driving your selections>",
+    "candidates": [
+      {{
+        "ticker": "<UPPERCASE ticker exactly as it appears in the ApeWisdom list>",
+        "name": "<company name>",
+        "rationale": "<1-2 sentences: why this stock warrants deeper analysis right now>"
+      }}
+    ]
+  }}
+
+  Rules:
+  - Select up to {max_candidates} tickers; fewer is fine if the evidence is not compelling
+  - ONLY pick from the ApeWisdom trending list — no exceptions
+  - Prefer tickers with strong Reddit momentum AND supportive macro/news context
+  - Avoid tickers with purely speculative Reddit buzz and no macro backing
+  - Respond with valid JSON only — no preamble, no markdown fences, no explanation
+
+discovery_user_template: |
+  ## Market Discovery Scan — {run_datetime} HKT
+
+  ### Top Trending US Stocks on Reddit (ApeWisdom — last 24h)
+  Rank | Ticker | Name | Mentions | 24h Rank Change
+  -----|--------|------|----------|----------------
+  {trending_stocks_table}
+
+  ---
+
+  ### Economic Indicators (FRED)
+  {economic_indicators_section}
+
+  ---
+
+  ### Macro Headlines (last 24 hours)
+  {macro_headlines}
+
+  ---
+
+  ### Gold Context
+  {gold_context}
+
+  ---
+
+  From the ApeWisdom trending list above, select up to **{max_candidates}** stocks that
+  are most worth deeper analysis given current market conditions and macro context.
+  Return JSON only.

@@ -1,0 +1,137 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# AI Investment Advisor — Main Configuration
+# Edit this file to configure your assets, schedule, and risk profile.
+# Secrets (API keys) go in .env — see .env.example
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Application ───────────────────────────────────────────────────────────────
+app:
+  name: "AI Investment Advisor"
+  timezone: "Asia/Hong_Kong"
+  log_level: "INFO"          # DEBUG | INFO | WARNING | ERROR | CRITICAL
+
+# ── Schedule ──────────────────────────────────────────────────────────────────
+schedule:
+  # systemd timer syntax (primary on GCP VM)
+  # Daily at 18:00 HKT = 10:00 UTC (HKT is UTC+8)
+  systemd_oncalendar: "*-*-* 10:00:00 UTC"
+  # APScheduler fallback (used when not running under systemd)
+  cron_hour: 10
+  cron_minute: 0
+  cron_days_of_week: "*"
+
+# ── Risk Profile ───────────────────────────────────────────────────────────────
+risk:
+  # conservative: requires confidence >= 75 for BUY/SELL; prefers HOLD
+  # moderate:     requires confidence >= 60; balanced signals
+  # aggressive:   requires confidence >= 45; embraces volatility
+  appetite: "moderate"
+
+# ── Discovery Configuration ───────────────────────────────────────────────────
+# The bot now discovers investment targets dynamically each run via a two-stage pipeline:
+#   Stage 1 — broad market scan → AI identifies up to max_candidates from Reddit trending
+#   Stage 2 — deep-dive on candidates → AI produces up to max_recommendations
+discovery:
+  max_candidates: 10         # Max US stocks AI selects in Stage 1 (from ApeWisdom list)
+  max_recommendations: 5     # Max final recommendations AI produces in Stage 2
+  always_include_gold: true  # Gold (GC=F) is always passed to Stage 2 regardless
+  apewisdom_top_n: 100       # How many ApeWisdom trending entries to show the Stage 1 AI
+
+# ── Data Sources ──────────────────────────────────────────────────────────────
+data_sources:
+  yfinance:
+    enabled: true
+    lookback_days: 20          # Trading days of OHLCV history to fetch
+    interval: "1d"
+
+  coingecko:
+    enabled: false             # Not used — crypto not in discovery scope
+
+  newsapi:
+    enabled: true
+    max_articles_per_asset: 5
+    hours_lookback: 24
+    language: "en"
+    sort_by: "relevancy"       # relevancy | publishedAt | popularity
+
+  alphavantage:
+    enabled: true
+    sentiment_limit: 50        # Max articles per sentiment API call
+
+  rss:
+    enabled: true              # Always on as a fallback source
+    feeds:
+      - name: "BBC Business"
+        url: "https://feeds.bbci.co.uk/news/business/rss.xml"
+      - name: "MarketWatch Pulse"
+        url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"
+    max_items_per_feed: 10
+    keywords_from_asset_names: true
+
+  finnhub:
+    enabled: true
+    max_news_per_stock: 5      # Headlines per stock from Finnhub
+    hours_lookback: 24         # How far back to fetch news
+    include_metrics: true      # Fetch PE ratio, analyst ratings, price targets (US stocks only)
+
+  marketaux:
+    enabled: true
+    max_articles_per_asset: 5  # News articles per asset from Marketaux
+
+  newsdata:
+    enabled: true
+    max_articles_per_asset: 5  # News articles per asset from NewsData.io
+    timeframe_hours: 24        # Lookback window in hours
+
+  fred:
+    enabled: true              # FRED API key required (free at fred.stlouisfed.org)
+    series:
+      - id: "CPIAUCSL"
+        name: "CPI (Inflation)"
+      - id: "UNRATE"
+        name: "Unemployment Rate"
+      - id: "FEDFUNDS"
+        name: "Fed Funds Rate"
+      - id: "DGS10"
+        name: "10Y Treasury Yield"
+      - id: "DGS2"
+        name: "2Y Treasury Yield"
+      - id: "GDP"
+        name: "US GDP (Quarterly)"
+
+  adanos:
+    enabled: true              # Adanos API key required (free tier: 250 req/month)
+    days_lookback: 7           # Sentiment lookback window in days
+    include_reddit_stocks: true
+    include_x_stocks: true
+    include_polymarket: true
+    include_reddit_crypto: false  # Crypto not in discovery scope
+
+  apewisdom:
+    enabled: true              # No API key required
+
+# ── AI Configuration ──────────────────────────────────────────────────────────
+ai:
+  model: "anthropic/claude-sonnet-4-6"
+  temperature: 0.3             # Lower = more deterministic / consistent output
+  max_tokens: 4096
+  max_retries: 3
+  retry_delay_seconds: 5
+  response_format: "json_object"
+
+# ── Reporting ─────────────────────────────────────────────────────────────────
+reporting:
+  telegram:
+    enabled: true
+    parse_mode: "Markdown"
+    max_message_length: 4096   # Telegram limit; report splits automatically
+
+  archive:
+    sqlite_db_path: "data/reports.db"
+    markdown_dir: "data/archive"
+    retention_days: 365        # Delete markdown archives older than this
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+notifications:
+  send_on_error: true          # Send Telegram alert if pipeline fails
+  send_summary_header: true    # Include portfolio-level summary at top of report

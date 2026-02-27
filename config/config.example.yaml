@@ -1,0 +1,113 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# AI Investment Advisor — Example Configuration (copy to config.yaml)
+# All available options are documented below with their defaults.
+# ══════════════════════════════════════════════════════════════════════════════
+
+app:
+  name: "AI Investment Advisor"
+  timezone: "Asia/Hong_Kong"   # Timezone for display purposes
+  log_level: "INFO"            # DEBUG | INFO | WARNING | ERROR | CRITICAL
+
+schedule:
+  systemd_oncalendar: "Mon-Fri 00:00:00 UTC"   # = 08:00 HKT weekdays
+  cron_hour: 0          # APScheduler fallback
+  cron_minute: 0
+  cron_days_of_week: "mon-fri"
+
+risk:
+  appetite: "moderate"  # conservative | moderate | aggressive
+
+assets:
+  stocks:
+    # HK stocks: use yfinance ticker format (e.g. "0700.HK")
+    - ticker: "0700.HK"
+      name: "Tencent Holdings"
+      exchange: "HKEX"
+      currency: "HKD"
+    # US stocks: standard ticker (e.g. "AAPL", "MSFT")
+    - ticker: "AAPL"
+      name: "Apple Inc."
+      exchange: "NASDAQ"
+      currency: "USD"
+
+  crypto:
+    # Use CoinGecko IDs (https://www.coingecko.com/en/coins/all)
+    - ticker: "bitcoin"
+      symbol: "BTC"
+      name: "Bitcoin"
+
+  forex:
+    # yfinance forex format: "{BASE}{QUOTE}=X"
+    - ticker: "USDHKD=X"
+      base: "USD"
+      quote: "HKD"
+      name: "US Dollar / HK Dollar"
+
+  commodities:
+    # yfinance futures format
+    - ticker: "GC=F"    # Gold futures
+      name: "Gold"
+      currency: "USD"
+      unit: "troy oz"
+    # - ticker: "SI=F"  # Silver futures
+    #   name: "Silver"
+    #   currency: "USD"
+    #   unit: "troy oz"
+
+data_sources:
+  yfinance:
+    enabled: true
+    lookback_days: 20   # Days of OHLCV history (used for MA, RSI)
+    interval: "1d"      # 1d | 1wk
+
+  coingecko:
+    enabled: true
+    vs_currency: "usd"
+    include_7d_change: true
+
+  newsapi:
+    enabled: true
+    max_articles_per_asset: 5   # Top N articles per asset
+    hours_lookback: 24
+    language: "en"
+    sort_by: "relevancy"        # relevancy | publishedAt | popularity
+
+  alphavantage:
+    enabled: true
+    sentiment_limit: 50         # Max news items per sentiment call
+
+  rss:
+    enabled: true
+    feeds:
+      - name: "Reuters Business"
+        url: "https://feeds.reuters.com/reuters/businessNews"
+      - name: "Reuters Markets"
+        url: "https://feeds.reuters.com/reuters/financialNews"
+      # Add more RSS feeds here:
+      # - name: "FT Markets"
+      #   url: "https://www.ft.com/rss/home/uk"
+    max_items_per_feed: 10
+    keywords_from_asset_names: true   # Filter RSS by asset names/tickers
+
+ai:
+  model: "anthropic/claude-sonnet-4-6"
+  temperature: 0.3      # 0.0 = most deterministic; 1.0 = most creative
+  max_tokens: 4096
+  max_retries: 3
+  retry_delay_seconds: 5
+  response_format: "json_object"
+
+reporting:
+  telegram:
+    enabled: true
+    parse_mode: "Markdown"
+    max_message_length: 4096   # Telegram max; long reports are split automatically
+
+  archive:
+    sqlite_db_path: "data/reports.db"
+    markdown_dir: "data/archive"
+    retention_days: 365        # Archive files older than this are deleted
+
+notifications:
+  send_on_error: true           # Alert via Telegram if the pipeline fails
+  send_summary_header: true     # Include macro summary at top of report

@@ -1,0 +1,28 @@
+[Unit]
+Description=AI Investment Advisor — Telegram bot listener
+Documentation=https://github.com/YOUR_USERNAME/ai-investment-advisor
+After=network-online.target
+Wants=network-online.target
+# The listener is independent of the one-shot pipeline service
+
+[Service]
+Type=simple
+User=advisor
+Group=advisor
+WorkingDirectory=/opt/ai-investment-advisor
+EnvironmentFile=/opt/ai-investment-advisor/.env
+ExecStart=/opt/ai-investment-advisor/venv/bin/python -m src.notifications.bot_listener
+
+# Restart if the listener crashes (e.g. network blip, Telegram API hiccup)
+Restart=on-failure
+RestartSec=30
+
+# Resource limits (listener is lightweight — just a polling loop)
+MemoryMax=128M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-investment-advisor-listener
+
+[Install]
+WantedBy=multi-user.target
