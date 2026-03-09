@@ -1,6 +1,14 @@
 # Secrets — NEVER commit these
 .env
 
+# Internal docs — kept local only
+CLAUDE.md
+CHANGELOG.md
+LESSONS.md
+DEPLOY_GUIDE.md
+LOCAL_SETUP.md
+PROJECT_TECH.md
+
 # Python
 __pycache__/
 *.py[cod]
