@@ -48,8 +48,11 @@ async def _handle_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     )
 
     try:
+        # --no-block: ask systemd to start the service then return immediately.
+        # Without it, systemctl waits until the one-shot service finishes (~2 min),
+        # which always exceeds any reasonable subprocess timeout.
         result = subprocess.run(
-            ["sudo", "/usr/bin/systemctl", "start", _PIPELINE_SERVICE],
+            ["sudo", "/usr/bin/systemctl", "start", "--no-block", _PIPELINE_SERVICE],
             capture_output=True,
             text=True,
             timeout=10,
@@ -70,7 +73,7 @@ async def _handle_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     f"Failed to start pipeline.\nError: {stderr[:200]}"
                 )
     except subprocess.TimeoutExpired:
-        logger.error("systemctl start timed out after 10s")
+        logger.error("systemctl start --no-block timed out after 10s — sudoers issue?")
         await update.message.reply_text(
             "Timed out trying to start the pipeline. Check VM logs."
         )
