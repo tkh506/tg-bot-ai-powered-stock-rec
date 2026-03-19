@@ -175,7 +175,7 @@ class AIConfig(BaseModel):
     model: str = "google/gemini-3.1-pro-preview"   # Stage 2 model
     stage1_model: str = "openai/gpt-5.4-mini"      # Stage 1 discovery model
     temperature: float = 0.3
-    max_tokens: int = 4096
+    max_tokens: int = 8192
     max_retries: int = 3
     retry_delay_seconds: int = 5
     response_format: str = "json_object"
