@@ -172,7 +172,8 @@ class DataSourcesConfig(BaseModel):
 
 
 class AIConfig(BaseModel):
-    model: str = "anthropic/claude-sonnet-4-6"
+    model: str = "google/gemini-3.1-pro-preview"   # Stage 2 model
+    stage1_model: str = "openai/gpt-5.4-mini"      # Stage 1 discovery model
     temperature: float = 0.3
     max_tokens: int = 4096
     max_retries: int = 3

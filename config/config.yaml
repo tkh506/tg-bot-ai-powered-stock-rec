@@ -32,7 +32,7 @@ risk:
 #   Stage 1 — broad market scan → AI identifies up to max_candidates from Reddit trending
 #   Stage 2 — deep-dive on candidates → AI produces up to max_recommendations
 discovery:
-  max_candidates: 10         # Max US stocks AI selects in Stage 1 (from ApeWisdom list)
+  max_candidates: 15         # Max US stocks AI selects in Stage 1 (from ApeWisdom list)
   max_recommendations: 5     # Max final recommendations AI produces in Stage 2
   always_include_gold: true  # Gold (GC=F) is always passed to Stage 2 regardless
   apewisdom_top_n: 100       # How many ApeWisdom trending entries to show the Stage 1 AI
@@ -112,7 +112,8 @@ data_sources:
 
 # ── AI Configuration ──────────────────────────────────────────────────────────
 ai:
-  model: "anthropic/claude-sonnet-4-6"
+  model: "google/gemini-3.1-pro-preview"   # Stage 2: deep-dive analysis + final recommendations
+  stage1_model: "openai/gpt-5.4-mini"      # Stage 1: discovery (faster, cheaper)
   temperature: 0.3             # Lower = more deterministic / consistent output
   max_tokens: 4096
   max_retries: 3

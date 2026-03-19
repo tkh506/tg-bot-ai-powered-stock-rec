@@ -340,8 +340,10 @@ def build_discovery_prompt(
         max_candidates=max_candidates,
     )
 
-    # Build ApeWisdom trending table
-    trending_table = _build_trending_table(broad_data.trending_stocks, top_n)
+    # Build ApeWisdom trending table (includes mention velocity + 5d price if available)
+    trending_table = _build_trending_table(
+        broad_data.trending_stocks, top_n, broad_data.candidate_prices
+    )
 
     # Economic indicators
     economic_section = _build_economic_section(broad_data.economic_indicators)
@@ -402,21 +404,29 @@ def build_discovery_prompt(
 def _build_trending_table(
     snapshot: Optional["ApeWisdomSnapshot"],
     top_n: int,
+    candidate_prices: dict[str, float] | None = None,
 ) -> str:
-    """Format the ApeWisdom trending list as a markdown table row per stock."""
+    """
+    Format the ApeWisdom trending list as a markdown table.
+
+    Columns: Rank | Ticker | Name | Mentions | MentionΔ% | RankΔ(24h) | 5d Price
+
+    MentionΔ% measures mention acceleration vs 24h ago — high velocity signals
+    early-stage buzz where price may not yet have reacted.
+    5d Price shows recent price movement — flat/negative price + rising buzz = opportunity.
+    """
     if not snapshot or snapshot.error or not snapshot.data:
         return "(trending data unavailable — no ApeWisdom data fetched)"
 
-    # Sort by rank (ascending = most trending first)
     entries = sorted(snapshot.data.values(), key=lambda e: e.rank)[:top_n]
     if not entries:
         return "(no trending stocks found)"
 
     rows = []
     for e in entries:
-        rank_change = ""
+        # Rank change vs 24h ago
         if e.rank_24h_ago is not None:
-            delta = e.rank_24h_ago - e.rank
+            delta = e.rank_24h_ago - e.rank  # positive = climbed
             if delta > 0:
                 rank_change = f"↑{delta}"
             elif delta < 0:
@@ -425,7 +435,22 @@ def _build_trending_table(
                 rank_change = "—"
         else:
             rank_change = "—"
-        rows.append(f"  {e.rank:>4} | {e.ticker:<8} | {e.name:<30} | {e.mentions:>8,} | {rank_change}")
+
+        # Mention velocity: % change in mentions vs 24h ago
+        if e.mentions_24h_ago and e.mentions_24h_ago > 0:
+            velocity = (e.mentions - e.mentions_24h_ago) / e.mentions_24h_ago * 100
+            velocity_str = f"{velocity:+.0f}%"
+        else:
+            velocity_str = "—"
+
+        # 5-day price change (from Phase 1 price check batch)
+        pct_5d = (candidate_prices or {}).get(e.ticker)
+        price_str = f"{pct_5d:+.1f}%" if pct_5d is not None else "—"
+
+        rows.append(
+            f"  {e.rank:>4} | {e.ticker:<8} | {e.name[:20]:<20} | "
+            f"{e.mentions:>8,} | {velocity_str:>10} | {rank_change:>10} | {price_str:>9}"
+        )
     return "\n".join(rows)
 
 

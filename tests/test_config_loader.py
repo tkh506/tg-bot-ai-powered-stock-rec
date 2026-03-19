@@ -18,7 +18,8 @@ def test_default_appconfig():
     """AppConfig with no arguments should use sensible defaults."""
     cfg = AppConfig()
     assert cfg.risk.appetite == "moderate"
-    assert cfg.ai.model == "anthropic/claude-sonnet-4-6"
+    assert cfg.ai.model == "google/gemini-3.1-pro-preview"
+    assert cfg.ai.stage1_model == "openai/gpt-5.4-mini"
     assert cfg.ai.temperature == 0.3
     assert cfg.reporting.telegram.max_message_length == 4096
 

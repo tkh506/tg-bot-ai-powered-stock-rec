@@ -47,6 +47,20 @@ CREATE TABLE IF NOT EXISTS signals (
 
 CREATE INDEX IF NOT EXISTS idx_signals_ticker ON signals(ticker, run_at);
 CREATE INDEX IF NOT EXISTS idx_reports_run_at ON reports(run_at);
+
+CREATE TABLE IF NOT EXISTS backtest_results (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal_id       INTEGER UNIQUE REFERENCES signals(id),
+    evaluated_at    TIMESTAMP NOT NULL,
+    ticker          TEXT NOT NULL,
+    signal          TEXT,
+    price_at_signal REAL,
+    price_5d_later  REAL,
+    pct_change      REAL,
+    outcome         TEXT CHECK(outcome IN ('CORRECT','INCORRECT','INCONCLUSIVE'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_backtest_ticker ON backtest_results(ticker, evaluated_at);
 """
 
 

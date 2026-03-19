@@ -62,7 +62,8 @@ def _run_pipeline(config, dry_run: bool = False) -> None:
         )
         try:
             raw_discovery, tok_in1, tok_out1 = ai_client.call_with_retry(
-                discovery_prompt, config
+                discovery_prompt, config,
+                model_override=config.ai.stage1_model,
             )
             discovery_result = response_parser.parse_candidates(raw_discovery)
             break
@@ -223,6 +224,27 @@ def run(dry_run: bool = False) -> None:
         sys.exit(0)
 
 
+def run_backtest_mode(dry_run: bool = False) -> None:
+    """Load config and run the weekly backtester."""
+    from src.analysis import backtester
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        print(f"FATAL: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"FATAL: Config validation failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    setup_logger(log_level=config.app.log_level)
+    logger.info(f"Starting backtest (dry_run={dry_run})")
+    try:
+        backtester.run_backtest(config, dry_run=dry_run)
+    except Exception as e:
+        logger.error(f"Backtest failed: {e}", exc_info=True)
+        sys.exit(0)
+
+
 def run_scheduled(config) -> None:
     """APScheduler-based runner (fallback for non-systemd environments)."""
     from apscheduler.schedulers.blocking import BlockingScheduler
@@ -263,9 +285,15 @@ if __name__ == "__main__":
         "--schedule", action="store_true",
         help="Run on APScheduler (use on non-systemd systems)"
     )
+    parser.add_argument(
+        "--backtest", action="store_true",
+        help="Run weekly backtest: evaluate past BUY/SELL signals vs actual 5-day outcomes"
+    )
     args = parser.parse_args()
 
-    if args.schedule:
+    if args.backtest:
+        run_backtest_mode(dry_run=args.dry_run)
+    elif args.schedule:
         try:
             cfg = load_config()
         except Exception as e:

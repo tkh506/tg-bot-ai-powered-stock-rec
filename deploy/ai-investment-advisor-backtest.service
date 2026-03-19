@@ -1,0 +1,29 @@
+[Unit]
+Description=AI Investment Advisor — weekly backtest accuracy check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+User=stockbot
+Group=stockbot
+WorkingDirectory=/tg-bot/tg-bot-ai-powered-stock-rec
+
+EnvironmentFile=/tg-bot/tg-bot-ai-powered-stock-rec/.env
+
+ExecStart=/tg-bot/tg-bot-ai-powered-stock-rec/venv/bin/python -m src.main --backtest
+
+# Backtest only needs yfinance + SQLite; lighter resource limits than main pipeline
+MemoryMax=256M
+CPUQuota=50%
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+Restart=no
+
+StandardOutput=append:/tg-bot/tg-bot-ai-powered-stock-rec/logs/advisor.log
+StandardError=append:/tg-bot/tg-bot-ai-powered-stock-rec/logs/advisor.log
+
+[Install]
+WantedBy=multi-user.target

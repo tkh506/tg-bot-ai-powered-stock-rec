@@ -1,0 +1,16 @@
+[Unit]
+Description=AI Investment Advisor — weekly backtest timer
+Requires=ai-investment-advisor-backtest.service
+
+[Timer]
+# Every Sunday at 12:00 HKT = 04:00 UTC (HKT is UTC+8)
+# Runs after the weekly trading cycle to evaluate the past week's signals
+OnCalendar=Sun *-*-* 04:00:00 UTC
+
+# Fire at the next opportunity if the VM was offline at the scheduled time
+Persistent=true
+
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

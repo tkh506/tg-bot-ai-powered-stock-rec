@@ -88,6 +88,7 @@ class BroadMarketData:
     macro_headlines: list[RSSArticle] = field(default_factory=list)
     economic_indicators: Optional[EconomicIndicators] = None
     gold_ohlcv: Optional[OHLCVData] = None                # GC=F price context for Stage 1
+    candidate_prices: dict[str, float] = field(default_factory=dict)  # ticker → pct_5d
     data_sources_used: list[str] = field(default_factory=list)
 
 
@@ -196,6 +197,24 @@ def fetch_broad_market_data(config: AppConfig) -> BroadMarketData:
             _merge_extended_prices({GOLD_TICKER: gold_ohlcv}, extended)
         except Exception as e:
             logger.warning(f"Gold extended price fetch failed: {e}")
+
+    # ── Phase 1 price reality check for top ApeWisdom candidates ──────────────
+    # Fetches 5-day price change for the top 40 trending stocks so Stage 1 AI
+    # can detect buzz/price divergence (rising buzz + flat price = early entry).
+    # Sequential single-batch call — never parallel yfinance (LESSON 4).
+    if broad.trending_stocks and not broad.trending_stocks.error and ds.yfinance.enabled:
+        try:
+            top40 = sorted(broad.trending_stocks.data.values(), key=lambda e: e.rank)[:40]
+            price_assets = [(e.ticker, e.ticker, "USD") for e in top40]
+            price_batch = fetch_ohlcv_batch(
+                price_assets, ds.yfinance.lookback_days, ds.yfinance.interval
+            )
+            for ticker, ohlcv in price_batch.items():
+                if not ohlcv.error:
+                    broad.candidate_prices[ticker] = ohlcv.pct_5d
+            logger.info(f"Phase 1 price check: {len(broad.candidate_prices)}/40 ticker prices fetched")
+        except Exception as e:
+            logger.warning(f"Phase 1 candidate price check failed (non-fatal): {e}")
 
     logger.info(f"Broad market data fetched. Sources: {broad.data_sources_used}")
     return broad
