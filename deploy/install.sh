@@ -43,9 +43,12 @@ systemctl enable ai-investment-advisor.timer
 systemctl start  ai-investment-advisor.timer
 
 # ── Sudoers rule — allows advisor user to trigger the pipeline from the bot listener ──
+# Both with and without --no-block are whitelisted (bot_listener uses --no-block).
 echo "==> Adding sudoers rule for pipeline trigger"
-echo "$APP_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl start ai-investment-advisor.service" \
-    > /etc/sudoers.d/advisor-trigger
+cat > /etc/sudoers.d/advisor-trigger << EOF
+$APP_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl start ai-investment-advisor.service
+$APP_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl start --no-block ai-investment-advisor.service
+EOF
 chmod 440 /etc/sudoers.d/advisor-trigger
 
 # ── systemd: Telegram bot listener ───────────────────────────────────────────
@@ -71,7 +74,7 @@ systemctl is-active ai-investment-advisor-listener.service \
 
 echo ""
 echo "Run a manual pipeline test:"
-echo "  sudo systemctl start ai-investment-advisor.service"
+echo "  sudo systemctl start --no-block ai-investment-advisor.service"
 echo "  journalctl -u ai-investment-advisor -f"
 echo ""
 echo "Or dry-run locally:"
