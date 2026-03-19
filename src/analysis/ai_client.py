@@ -96,9 +96,19 @@ def call(
 
     # Extract content
     try:
-        content = data["choices"][0]["message"]["content"]
+        choice = data["choices"][0]
+        content = choice["message"]["content"]
     except (KeyError, IndexError) as e:
         raise OpenRouterError(f"Unexpected response structure: {e} — {str(data)[:300]}")
+
+    # content can be None when the model hits max_tokens, a content filter, or
+    # returns an empty completion. Raise clearly rather than letting .strip() crash later.
+    if content is None:
+        finish_reason = data.get("choices", [{}])[0].get("finish_reason", "unknown")
+        raise OpenRouterError(
+            f"Model returned null content (finish_reason='{finish_reason}'). "
+            f"Model: {model}. This may be a max_tokens limit or content filter."
+        )
 
     # Log token usage
     usage = data.get("usage", {})
